@@ -1,0 +1,318 @@
+Technical Design Document (TDD)
+
+Project Title: Enhanced AppDynamics BT Onboarding for Multi-Datacenter KPI Fetching
+
+Version: 1.0
+Date: [Enter Current Date]
+Authors: [Your Team/Name]
+
+------------------------------------------------------------------------------------
+
+1. Introduction & Goals
+    *   This document outlines the technical design for implementing the enhanced AppDynamics Business Transaction (BT) onboarding feature.
+    *   The primary goal is to allow SREs to configure AppDynamics BTs that span multiple datacenters using a single base configuration and a selection of datacenters, rather than inputting multiple individual REST URLs.
+    *   This will involve modifications to the existing SRE onboarding portal's backend services and potentially its data model.
+    *   Refer to PRD "Enhanced AppDynamics BT Onboarding for Multi-Datacenter KPI Fetching" for product requirements.
+
+2. Current System Architecture (Assumptions)
+    *   The SRE onboarding portal has a frontend (UI) and a backend (API/services).
+    *   There's a service responsible for persisting BT configurations (likely in a database).
+    *   There's a separate scheduler/worker service responsible for periodically fetching KPIs based on the stored BT configurations.
+    *   This KPI fetching service currently knows how to make HTTP requests to Splunk (via query) and AppDynamics (via REST API URL).
+    *   A list of available datacenters and their corresponding AppDynamics controller base URLs is either configurable or can be made configurable.
+
+3. Proposed Technical Solution
+
+    3.1. Data Model Changes (for BT Configuration)
+        *   The existing data store for BT configurations (e.g., a table named `BusinessTransactions` or similar) will need modification.
+        *   Proposal (Modify Existing Table):
+            *   Add new nullable fields to `BusinessTransactions`:
+                *   `appd_base_metric_path` (String): e.g., "Overall Application Performance|KPI_Name" or "Application Infrastructure Performance|Node_Name|Agent|Metric_Path"
+                *   `appd_target_datacenters` (Array of Strings/JSON): Stores a list of selected datacenter identifiers (e.g., `["dc1", "dc2", "us-east-1"]`).
+                *   `appd_is_multi_dc` (Boolean): Flag to indicate if this BT uses the new multi-DC setup.
+            *   The existing `appd_rest_url` field would be used if `appd_is_multi_dc` is false or null. If true, `appd_base_metric_path` and `appd_target_datacenters` are used.
+
+    3.2. Datacenter to AppDynamics URL Mapping
+        *   A new configuration mechanism is required to map datacenter identifiers (e.g., "dc1", "us-west-2") to their respective AppDynamics controller base URLs.
+        *   Proposal: A configuration file (e.g., YAML, JSON) or environment variables managed by the portal's deployment.
+            Example `appdynamics_dc_mapping.yaml`:
+            ```yaml
+            datacenters:
+              dc1:
+                appd_controller_base_url: "https://dc1-appd.mycompany.com/controller/rest/applications/"
+              dc2:
+                appd_controller_base_url: "https://dc2-appd.mycompany.com/controller/rest/applications/"
+              us-east-1:
+                appd_controller_base_url: "https://use1-appd.mycompany.com/controller/rest/applications/"
+            ```
+        *   This mapping will be loaded by the KPI fetching service at startup.
+        *   The `appd_base_metric_path` provided by the user would then be appended to this base URL.
+
+    3.3. Backend API Changes (for Onboarding UI)
+        *   The existing API endpoint (e.g., `POST /api/bt` or `PUT /api/bt/{id}`) used by the SRE onboarding page to create/update BTs will need to accept the new fields: `appd_base_metric_path`, `appd_target_datacenters`, and `appd_is_multi_dc`.
+        *   Request Payload (addition for AppDynamics):
+            ```json
+            {
+              "name": "My Multi-DC BT",
+              "kpi_backend_type": "APPDYNAMICS",
+              "appd_is_multi_dc": true,
+              "appd_base_metric_path": "MyApplication/path/to/metric",
+              "appd_target_datacenters": ["dc1", "dc2"]
+            }
+            ```
+        *   Backend validation:
+            *   If `appd_is_multi_dc` is true, then `appd_base_metric_path` and `appd_target_datacenters` must be provided.
+            *   `appd_target_datacenters` must contain valid datacenter identifiers.
+
+    3.4. KPI Fetching Service Logic Modifications
+        *   When processing an `APPDYNAMICS` BT:
+            1.  Check the `appd_is_multi_dc` flag.
+            2.  If `false` (Legacy BT): Use `appd_rest_url`.
+            3.  If `true` (New Multi-DC BT):
+                *   Retrieve `appd_base_metric_path` and `appd_target_datacenters`.
+                *   For each datacenter in `appd_target_datacenters`:
+                    *   Look up `appd_controller_base_url` from mapping.
+                    *   Construct full AppDynamics REST URL: `appd_controller_base_url + appd_base_metric_path`.
+                    *   Make the HTTP GET request.
+                    *   Tag fetched data with the source datacenter.
+                *   Aggregate/process results.
+        *   Error Handling: Log errors for individual DC calls, attempt others. Overall status should reflect partial success/failure.
+        *   Authentication: Reuse existing AppDynamics authentication.
+
+4. Security Considerations
+    *   Protect the datacenter mapping configuration.
+    *   Input validation on API endpoints.
+    *   Leverage existing secure AppDynamics authentication.
+
+5. Performance & Scalability
+    *   Increased outbound requests; consider concurrent API calls per BT.
+    *   Implement proper timeouts and retries for AppDynamics API calls.
+
+6. Deployment & Configuration
+    *   Deploy updated backend service(s).
+    *   Deploy/manage the new datacenter mapping configuration.
+    *   Database schema migration scripts will be required.
+
+7. Testing Considerations
+    *   Unit tests for new logic (URL construction, multi-DC iteration).
+    *   Integration tests for the API endpoint.
+    *   End-to-end tests:
+        *   Onboarding new multi-DC AppDynamics BT.
+        *   Verification of KPI fetching from all specified datacenters.
+        *   Verification of legacy AppDynamics BTs.
+        *   Error scenario testing (e.g., one DC AppDynamics instance down).
+
+8. Open Questions & Future Considerations
+    *   Handling granular metric path differences per DC (out of scope for v1).
+    *   Admin UI for datacenter mapping (future enhancement).
+    *   Dynamic datacenter list in UI (recommended).
+    *   Authentication per datacenter (significant complexity, assume shared for v1).
+
+9. Rollback Plan
+    *   Revert backend service(s) to the previous version.
+    *   Revert database schema changes (if migrations applied).
+    *   Feature is additive; old configurations remain unaffected if gated by `appd_is_multi_dc`.
+
+------------------------------------------------------------------------------------
+
+
+
+Functional Design Document (FDD)
+
+Project Title: Enhanced AppDynamics BT Onboarding for Multi-Datacenter KPI Fetching
+
+Version: 1.0
+Date: [Enter Current Date]
+Authors: [Your Team/Name]
+
+------------------------------------------------------------------------------------
+
+1. Introduction
+    *   This document describes the functional design for the "Enhanced AppDynamics BT Onboarding for Multi-Datacenter KPI Fetching" feature. It details how the user (SRE) will interact with the system to configure AppDynamics Business Transactions (BTs) that source KPIs from multiple datacenters.
+    *   This FDD builds upon the requirements outlined in the PRD.
+
+2. User Roles & Goals
+    *   User: Site Reliability Engineer (SRE) or Application Operations team member.
+    *   Goal: To easily and accurately onboard a new AppDynamics BT or update an existing one to fetch KPIs from multiple datacenters without manually entering multiple full REST URLs.
+
+3. Functional Overview
+    The SRE onboarding page for BTs will be modified. When "AppDynamics" is selected as the KPI backend source, new UI elements will allow the user to specify if the BT is multi-datacenter. If so, they will provide a base metric path and select the relevant datacenters from a predefined list.
+
+4. Detailed Functional Specifications
+
+    4.1. BT Onboarding/Editing Form - AppDynamics Source
+        *   **Existing Fields:** (Assume fields like "BT Name", "KPIs", "Description", "Owner", etc., remain as is).
+        *   **KPI Backend Selection:**
+            *   Dropdown: "Select KPI Backend" (Options: Splunk, AppDynamics, etc.)
+            *   Current Behavior: When "AppDynamics" is selected, a field for "AppDynamics REST URL" is typically shown.
+
+        *   **New/Modified Behavior when "AppDynamics" is selected:**
+            1.  **"Configure for Multiple Datacenters?" Checkbox/Toggle:**
+                *   Label: "Fetch KPIs from multiple datacenters?"
+                *   Type: Checkbox or Toggle Switch.
+                *   Default: Unchecked / Off.
+
+            2.  **If "Fetch KPIs from multiple datacenters?" is UNCHECKED (Legacy/Single DC Mode):**
+                *   Display the existing input field:
+                    *   Label: "AppDynamics REST URL"
+                    *   Input Type: Text field.
+                    *   Description/Tooltip: "Enter the full AppDynamics REST API URL to fetch KPIs."
+                    *   Behavior: Functions as currently implemented for single AppDynamics URLs.
+
+            3.  **If "Fetch KPIs from multiple datacenters?" is CHECKED (New Multi-DC Mode):**
+                *   Hide the "AppDynamics REST URL" input field.
+                *   Display the following new input fields:
+                    *   **Field 1: "AppDynamics Base Metric Path"**
+                        *   Label: "AppDynamics Base Metric Path"
+                        *   Input Type: Text field.
+                        *   Description/Tooltip: "Enter the AppDynamics metric path common across datacenters. Example: MyGreatApp/tiers/MyTier/Business%20Transaction%20Performance/BTs/MyBTName/KPIs/Average%20Response%20Time%20(ms). Do NOT include the controller base URL (e.g., https://...). The system will append this to the correct datacenter controller URL."
+                        *   Validation: Required. Must not be empty. Should ideally not start with http/https.
+                    *   **Field 2: "Target Datacenters"**
+                        *   Label: "Select Target Datacenters"
+                        *   Input Type: Multi-select dropdown list or a list of checkboxes.
+                        *   Options: The list of datacenters will be populated from a system-defined configuration (e.g., "DC1", "DC2", "US-EAST-1", "EU-WEST-1").
+                        *   Description/Tooltip: "Select all datacenters from which KPIs for this BT should be fetched."
+                        *   Validation: At least one datacenter must be selected.
+
+    4.2. User Flows
+
+        4.2.1. User Onboards a New Multi-Datacenter AppDynamics BT
+            1.  User navigates to the "Onboard New BT" page.
+            2.  User fills in common BT details (Name, Description, etc.).
+            3.  User selects "AppDynamics" from the "Select KPI Backend" dropdown.
+            4.  The "Fetch KPIs from multiple datacenters?" checkbox appears (unchecked by default).
+            5.  User CHECKS the "Fetch KPIs from multiple datacenters?" checkbox.
+            6.  The "AppDynamics REST URL" field is hidden (or disabled).
+            7.  The "AppDynamics Base Metric Path" input field and "Select Target Datacenters" multi-select dropdown become visible and enabled.
+            8.  User enters a valid base metric path into the "AppDynamics Base Metric Path" field.
+            9.  User selects one or more datacenters from the "Select Target Datacenters" list.
+            10. User clicks "Save" or "Submit."
+            11. System validates inputs:
+                *   If validation fails (e.g., base metric path empty, no datacenters selected), an appropriate error message is displayed next to the relevant field(s), and the form is not submitted.
+                *   If validation passes, the configuration is saved, and the user is redirected to a confirmation page or BT details page.
+
+        4.2.2. User Onboards a New Single-Datacenter AppDynamics BT (Existing Behavior)
+            1.  User navigates to the "Onboard New BT" page.
+            2.  User fills in common BT details.
+            3.  User selects "AppDynamics" from "Select KPI Backend."
+            4.  User LEAVES "Fetch KPIs from multiple datacenters?" UNCHECKED.
+            5.  The "AppDynamics REST URL" field is visible and enabled.
+            6.  User enters the full AppDynamics REST URL.
+            7.  User clicks "Save" or "Submit."
+            8.  System validates and saves (current behavior).
+
+        4.2.3. User Edits an Existing BT
+            *   If editing an old AppDynamics BT (configured with a single full URL): The form loads with "Fetch KPIs from multiple datacenters?" UNCHECKED and the "AppDynamics REST URL" field populated. The SRE can choose to switch to the multi-DC mode.
+            *   If editing a new AppDynamics BT (configured with multi-DC mode): The form loads with "Fetch KPIs from multiple datacenters?" CHECKED, the "AppDynamics Base Metric Path" populated, and the previously selected datacenters highlighted in the "Select Target Datacenters" list.
+
+    4.3. Error Handling and Validation Messages (Examples)
+        *   On "AppDynamics Base Metric Path" field:
+            *   If empty when multi-DC is checked: "Base Metric Path is required."
+            *   If it looks like a full URL: "Please enter only the metric path, not the full controller URL." (Optional, helpful validation)
+        *   On "Select Target Datacenters" field:
+            *   If none selected when multi-DC is checked: "At least one datacenter must be selected."
+        *   General form submission error (if backend save fails): "An error occurred while saving the BT configuration. Please try again."
+
+    4.4. Data Display (Assumption)
+        *   This FDD assumes that the existing KPI display mechanism in the portal can handle and correctly attribute KPIs to their source datacenter when the backend provides this information (as it already does for Splunk). No changes to the display screens are detailed in this FDD, but consistency is expected.
+
+5. Non-Functional Requirements (from User Perspective)
+    *   Performance: The onboarding form should remain responsive. Selecting datacenters should be quick.
+    *   Usability: The new options for AppDynamics multi-DC configuration should be intuitive and easy to understand for SREs. Tooltips and clear labels are important.
+    *   Accessibility: Standard web accessibility guidelines should be followed for new UI elements.
+
+6. Out of Scope (for this FDD, related to UI/Functionality)
+    *   Admin interface for managing the list of datacenters (this FDD assumes the list is available to the form).
+    *   Automatic detection/suggestion of base metric paths or datacenters.
+
+7. Open Questions/Points for UX Review
+    *   Is a multi-select dropdown or a list of checkboxes better for "Select Target Datacenters"? (Consider the typical number of datacenters).
+    *   Clarity of labels and tooltip text for the new fields – requires SRE feedback.
+
+------------------------------------------------------------------------------------
+
+
+
+Product Requirements Document (PRD)
+
+Project Title: Enhanced AppDynamics BT Onboarding for Multi-Datacenter KPI Fetching
+
+Version: 1.0
+Date: [Enter Current Date]
+Authors: [Your Team/Name]
+
+------------------------------------------------------------------------------------
+
+1. Introduction & Purpose
+    *   Current Situation: Our SRE onboarding portal allows users (primarily SREs) to onboard application Business Transactions (BTs) by specifying details like name, KPIs, and how to fetch these KPIs from backend systems like Splunk or AppDynamics. While Splunk queries are typically designed to return KPIs per datacenter from a single query, AppDynamics KPI fetching currently requires SREs to manually input separate REST URLs for each datacenter if a BT spans multiple datacenters.
+    *   Problem: This manual input of multiple AppDynamics URLs is cumbersome, error-prone, time-consuming, and creates an inconsistent user experience compared to the more streamlined Splunk onboarding process.
+    *   Goal: To improve the SRE onboarding experience for AppDynamics-backed BTs by enabling a simplified, unified method for configuring KPI fetching across multiple datacenters, similar to the ease of use provided for Splunk.
+
+2. Target Users
+    *   Site Reliability Engineers (SREs)
+    *   Application Operations teams responsible for monitoring and onboarding BTs into the portal.
+
+3. User Needs & Pain Points Addressed
+    *   Need for Efficiency: SREs need to onboard BTs quickly and without repetitive manual data entry.
+    *   Need for Accuracy: Reduce the likelihood of typos or incorrect URLs when configuring multiple AppDynamics endpoints.
+    *   Need for Consistency: Provide a more consistent onboarding experience regardless of whether the backend is Splunk or AppDynamics for multi-datacenter scenarios.
+    *   Current Pain: Frustration with manually identifying and entering multiple AppDynamics URLs for each datacenter. Increased chance of missing a datacenter or entering an incorrect URL.
+
+4. Proposed Solution (High-Level)
+    Modify the SRE onboarding page for BTs. When "AppDynamics" is selected as the KPI backend, instead of requiring multiple individual REST URL inputs for multi-datacenter applications, the system will allow users to:
+    *   Specify a base AppDynamics REST URL component (e.g., metric path).
+    *   Indicate the datacenters from which KPIs for this BT should be fetched.
+    The backend system will then be responsible for constructing and executing the necessary API calls to each specified AppDynamics instance for the relevant datacenters.
+
+5. User Stories
+    *   US1: As an SRE, I want to onboard an AppDynamics BT that spans multiple datacenters by providing a single base configuration and selecting the relevant datacenters, so that I don't have to manually input multiple REST URLs and can reduce configuration errors.
+    *   US2: As an SRE, when configuring an AppDynamics BT for multiple datacenters, I want the system to guide me in specifying the datacenter-specific information clearly, so that the configuration is straightforward.
+    *   US3: As an SRE, I expect the portal to automatically fetch KPIs from all specified datacenters for an AppDynamics BT configured using the new method, so that I get a complete view of my application's health without manual intervention for each DC.
+    *   US4: As an SRE, I want the process for configuring multi-datacenter AppDynamics BTs to feel as intuitive and efficient as the current process for multi-datacenter Splunk BTs.
+
+6. Key Features/Requirements
+    *   FR1: Modified UI for AppDynamics Source:
+        *   When "AppDynamics" is selected as the backend, the UI must provide an option to indicate that the BT spans multiple datacenters.
+        *   If multi-datacenter is indicated:
+            *   Allow input for a *base* AppDynamics metric path (e.g., "MyApplication/path/to/metric").
+            *   Provide a mechanism for the SRE to select/specify the relevant datacenters (e.g., multi-select dropdown from a pre-defined list).
+    *   FR2: Datacenter Configuration (Backend Support):
+        *   The system must have a way to map a "datacenter" selection to a specific AppDynamics instance base URL (managed via system configuration).
+    *   FR3: Backend Logic for Multi-DC KPI Fetching:
+        *   The backend service must dynamically construct the specific AppDynamics REST URL for each selected datacenter and execute API calls.
+        *   Aggregate or present per-datacenter KPIs consistently with Splunk.
+    *   FR4: Validation:
+        *   Input validation for new AppDynamics configuration fields.
+        *   Validation that selected datacenters are valid.
+    *   FR5: Backward Compatibility:
+        *   Existing AppDynamics BTs (single URL) must continue to function. This enhancement applies to new/edited BTs opting into the multi-DC mode.
+
+7. Success Metrics
+    *   Reduction in average time to onboard a multi-datacenter AppDynamics BT.
+    *   Decrease in configuration errors/support tickets for AppDynamics BT onboarding.
+    *   Positive qualitative feedback from SREs (ease of use, efficiency).
+    *   Adoption rate of the new feature for new AppDynamics BTs.
+
+8. Scope
+    *   In Scope:
+        *   UI modifications to the BT onboarding page for AppDynamics source.
+        *   Backend changes for multi-DC AppDynamics configuration and KPI fetching.
+        *   Mechanism for SREs to specify target datacenters.
+    *   Out of Scope (for this iteration):
+        *   Changes to Splunk onboarding.
+        *   Auto-discovery of datacenters for an AppDynamics application.
+        *   Fundamental changes to KPI display (assuming current display supports per-DC data).
+        *   Admin interface for managing datacenter-to-AppDynamics URL mappings (assumed system config for now).
+        *   Automated migration of old AppDynamics configurations.
+
+9. Assumptions
+    *   A predefined list of datacenters is available/configurable in the system.
+    *   A consistent pattern or manageable mapping exists for AppDynamics controller base URLs per datacenter.
+    *   The AppDynamics REST API *metric path* for a given KPI is largely the same across datacenters.
+
+10. Open Questions/Further Discussion Points
+    *   How exactly will the mapping between "datacenter" and its AppDynamics controller URL be managed? (PRD assumes system config, TDD details this).
+    *   How to handle slight metric path variations per DC (if they exist)? (PRD defers this).
+    *   Error handling presentation for individual DC AppDynamics calls.
+
+------------------------------------------------------------------------------------
