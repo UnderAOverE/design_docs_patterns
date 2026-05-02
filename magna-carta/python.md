@@ -1,11 +1,10 @@
-# 🏢 Engineering Handbook  
-## Python Backend Standards & Practices
+# Python Standards & Practices
 
 ---
 
 ## 📖 1. Purpose
 
-This handbook defines the engineering standards, architecture guidelines, and development practices for all backend services.
+This handbook defines the engineering standards, architecture guidelines, and development practices for all python projects.
 
 It ensures:
 - Consistency across teams
@@ -16,13 +15,14 @@ It ensures:
 
 ## 🎯 2. Guiding Principles
 
-- Clarity over cleverness  
-- Explicit over implicit (Zen of Python)  
-- Performance is a feature  
-- Async-first mindset  
-- Strong typing everywhere  
-- Separation of concerns  
-- Config-driven systems  
+- Clarity over cleverness
+- Explicit over implicit (Zen of Python)
+- Performance is a feature
+- Async-first mindset
+- Strong typing everywhere
+- Separation of concerns
+- Config-driven systems
+- Provides standards and guidelines, you don't have to incorporate everything you see in this document however if you see any exception or deviation ask me.
 
 ---
 
@@ -35,10 +35,14 @@ It ensures:
 - Data modeling: dataclasses, pydantic, Enums
 - Typing: typing, Protocol, ABC, Annotated
 - CLI: typer
-- Async DB: motor
-- Data processing: polars
-- Use functools, itertools, collections where-ever deemed necessary
-- FASTAPI for RESTAPI/ API development
+- Configuration: hydra
+- Async DB: motor, sync DB: pymongo
+- Data processing: polars & numpy
+- Use functools, itertools & collections where-ever deemed necessary
+- API development: FASTAPI
+- Scheduler: APScheduler
+- HTTP client: httpx (async and sync)
+- Notification: Email (simple and HTML based)
 
 ---
 
@@ -46,24 +50,28 @@ It ensures:
 
 ```
 ├──project_name
-	├──bin/                   # entry point executors (mainly bash scripts calling python entry points, essentially initializing/ priming the entry points - making sure the required py version, dirs, etc are in place. Also these scripts needs to have self tracker making sure multiple instances are not running causing corruption. This feature can be turned on and off by the user)
-	├──docs/                  # will have various wiki markdown files explaining and going in depth about src files, this is why README.md should be a high level overview and point to here for more detailed descriptions
-	├──src/   
-		├── api/              # API code goes here and sub-dir depending on the project 
-		├── common/           # Shared/ common utilities
-			├── constants.py          # All common or shared constants go here
-		├── config/           # Configuration management   
-		├── controllers   
-		├── models/           # Pydantic / dataclasses   
-		├── repositories/     # Data access layer   
-		├── services/         # Business logic   
-		└── main.py           # Entry point, can have multiple entry points depends on the project
-		├── constants.py      # All project level/ application constants go here
-	├──tests/                 # it should follow same structure as src
-	├──README.md              # High level readme 
-	├──requirements.txt
-	├──pyproject.toml         # my future choise is uv
-	├──.gitignore
+	├── bin/                   # entry point executors (mainly bash scripts calling python entry points, essentially initializing/ priming the entry points - making sure the required py version, dirs, etc are in place. Also these scripts needs to have self tracker making sure multiple instances are not running causing corruption. This feature can be turned on and off by the user)
+	├── docs/                  # will have various wiki markdown files explaining and going in depth about src files, this is why README.md should be a high level overview and point to here for more detailed descriptions
+	├── logs/                  # Logging
+	├── output/                # Any module that requires to capture output (can contain telemetry data too)
+	├── reports/               # Any module that requires to generate reports (can contain telemetry data too)
+	├── src/
+		├── api/               # API code goes here and sub-dir depending on the project
+		├── common/            # Shared/ common utilities, DB client, DB connection and other settings, Async and sync http client, logging, encryption, decryting code, email sender
+			├── constants.py   # All common or shared constants go here
+		├── config/            # Configuration management
+		├── controllers
+		├── models/            # Pydantic / dataclasses
+		├── repositories/      # Data access layer
+		├── telemetry/         # OTEL code goes here
+		├── services/          # Business logic
+		├── constants.py       # All project level/ application constants go here
+		└── main.py            # Entry point, can have multiple entry points depends on the project
+	├── tests/                 # It should follow same structure as src (Project is not complete if at least 95% score is not achieved) and I have common folder which should contain code which I can lift and shift to other projects and the corresponding tests and not worry to start over.
+	├── README.md              # High level readme
+	├── requirements.txt
+	├── pyproject.toml         # my future choise is uv
+	├── .gitignore
 ```
 ---
 
@@ -76,7 +84,7 @@ It ensures:
 
 ### Priority Order
 
-CLI > ENV > Pydantic Settings > Mongo-based Settings 
+CLI > ENV > Pydantic Settings > Mongo-based Settings - Always take CLI config/ settings over the ENV based over pydantic-settings and if none found fallback to mongo based settings (Not sure how to approach this)
 
 ### Requirements
 - Use Pydantic Settings
@@ -108,11 +116,13 @@ CLI > ENV > Pydantic Settings > Mongo-based Settings
   - Factory
   - Strategy
   - Builder
-  - Port & Adapter
+  - Domain, Port & Adapters
+  - Cohesion
   - Specification
   - Dependency Injection
 
 - Follow SOLID principles
+- Use value objects instead of primitivies
 - Follow the Zen of Python:
   ```python   import this   ```
 
@@ -124,10 +134,11 @@ CLI > ENV > Pydantic Settings > Mongo-based Settings
 - Type hints for all functions
 - Docstrings for public APIs
 - Clear naming conventions
+- If a design pattern or conventions is being implemented define that in the comments above that section
 
 ### Example
 
-python def get_user(user_id: str) -> User:     """Fetch a user by ID.""" 
+python def get_user(user_id: str) -> User:     """Fetch a user by ID."""
 
 ---
 
@@ -137,6 +148,7 @@ python def get_user(user_id: str) -> User:     """Fetch a user by ID."""
 - Prefer async/await
 - Consider Big-O complexity
 - Use batch processing
+- Use multiprocessing and multi threading where-ever deemed necessary
 
 ### Optimization Techniques
 - Minimize database calls
@@ -161,7 +173,7 @@ python def get_user(user_id: str) -> User:     """Fetch a user by ID."""
 
 ### Repository Pattern
 
-Service → Repository → Database 
+Service → Repository → Database
 
 ### Requirements
 - Implement Base Repository
@@ -235,6 +247,6 @@ A feature is complete when:
 
 ## 🧭 19. Final Note
 
-> Consistency beats cleverness.  
-> Simplicity scales.  
+> Consistency beats cleverness.
+> Simplicity scales.
 > Performance matter.
