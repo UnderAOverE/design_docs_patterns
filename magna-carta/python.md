@@ -33,31 +33,33 @@ It ensures:
 
 ### Core Libraries & Tools
 - Data modeling: dataclasses, pydantic, Enums
-- Typing: typing, Protocol, Annotated
+- Typing: typing, Protocol, ABC, Annotated
 - CLI: typer
 - Async DB: motor
 - Data processing: polars
-- Use functools, itertools, collections whereever deemed necessary
+- Use functools, itertools, collections where-ever deemed necessary
+- FASTAPI for RESTAPI/ API development
 
 ---
 
 ## 🏗️ 4. Project Architecture
-
-src/   
-	├── api/              # API routes 
-	├── bin   
-	├── controllers   
-	├── services/         # Business logic   
-	├── repositories/     # Data access layer   
-	├── models/           # Pydantic / dataclasses   
-	├── config/           # Configuration management   
-	├── utils/            # Shared utilities   
-	└── main.py           # Entry point
-tests/ # it should follow same structure as src
-README.md
-requirements.txt
-pyproject.toml # my future choise is uv
-.gitignore
+├──project_name
+	├──bin/                   # entry point executors (mainly bash scripts calling python entry points, essentially initializing/ priming the entry points - making sure the required py version, dirs, etc are in place. Also these scripts needs to have self tracker making sure multiple instances are not running causing corruption. This feature can be turned on and off by the user)
+	├──docs/                  # will have various wiki markdown files explaining and going in depth about src files, this is why README.md should be a high level overview and point to here for more detailed descriptions
+	├──src/   
+		├── api/              # API code goes here and sub-dir depending on the project 
+		├── common/           # Shared/ common utilities   
+		├── config/           # Configuration management   
+		├── controllers   
+		├── models/           # Pydantic / dataclasses   
+		├── repositories/     # Data access layer   
+		├── services/         # Business logic   
+		└── main.py           # Entry point
+	├──tests/                 # it should follow same structure as src
+	├──README.md              # High level readme 
+	├──requirements.txt
+	├──pyproject.toml         # my future choise is uv
+	├──.gitignore
 ---
 
 ## ⚙️ 5. Configuration Management
