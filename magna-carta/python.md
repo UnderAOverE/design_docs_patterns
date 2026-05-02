@@ -43,7 +43,8 @@ It ensures:
 ---
 
 ## 🏗️ 4. Project Architecture
--
+
+```
 ├──project_name
 	├──bin/                   # entry point executors (mainly bash scripts calling python entry points, essentially initializing/ priming the entry points - making sure the required py version, dirs, etc are in place. Also these scripts needs to have self tracker making sure multiple instances are not running causing corruption. This feature can be turned on and off by the user)
 	├──docs/                  # will have various wiki markdown files explaining and going in depth about src files, this is why README.md should be a high level overview and point to here for more detailed descriptions
@@ -61,6 +62,7 @@ It ensures:
 	├──requirements.txt
 	├──pyproject.toml         # my future choise is uv
 	├──.gitignore
+```
 ---
 
 ## ⚙️ 5. Configuration Management
