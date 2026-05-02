@@ -134,7 +134,7 @@ CLI > ENV > Pydantic Settings > Mongo-based Settings - Always take CLI config/ s
 - Type hints for all functions
 - Docstrings for public APIs
 - Clear naming conventions
-- If a design pattern or conventions is being implemented define that in the comments above that section
+- If a design pattern or conventions is being implemented provide explanation/ description that in the comments above that section
 
 ### Example
 
