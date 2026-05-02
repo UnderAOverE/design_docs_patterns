@@ -50,13 +50,15 @@ It ensures:
 	├──docs/                  # will have various wiki markdown files explaining and going in depth about src files, this is why README.md should be a high level overview and point to here for more detailed descriptions
 	├──src/   
 		├── api/              # API code goes here and sub-dir depending on the project 
-		├── common/           # Shared/ common utilities   
+		├── common/           # Shared/ common utilities
+			├── constants.py          # All common or shared constants go here
 		├── config/           # Configuration management   
 		├── controllers   
 		├── models/           # Pydantic / dataclasses   
 		├── repositories/     # Data access layer   
 		├── services/         # Business logic   
-		└── main.py           # Entry point
+		└── main.py           # Entry point, can have multiple entry points depends on the project
+		├── constants.py      # All project level/ application constants go here
 	├──tests/                 # it should follow same structure as src
 	├──README.md              # High level readme 
 	├──requirements.txt
