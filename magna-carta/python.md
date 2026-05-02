@@ -32,18 +32,32 @@ It ensures:
 - Python 3.12 (mandatory)
 
 ### Core Libraries & Tools
-- Data modeling: dataclasses, pydantic
+- Data modeling: dataclasses, pydantic, Enums
 - Typing: typing, Protocol, Annotated
 - CLI: typer
 - Async DB: motor
 - Data processing: polars
+- Use functools, itertools, collections whereever deemed necessary
 
 ---
 
 ## 🏗️ 4. Project Architecture
 
-text src/   ├── api/              # API routes / controllers   ├── services/         # Business logic   ├── repositories/     # Data access layer   ├── models/           # Pydantic / dataclasses   ├── config/           # Configuration management   ├── utils/            # Shared utilities   └── main.py           # Entry point 
-
+src/   
+	├── api/              # API routes 
+	├── bin   
+	├── controllers   
+	├── services/         # Business logic   
+	├── repositories/     # Data access layer   
+	├── models/           # Pydantic / dataclasses   
+	├── config/           # Configuration management   
+	├── utils/            # Shared utilities   
+	└── main.py           # Entry point
+tests/ # it should follow same structure as src
+README.md
+requirements.txt
+pyproject.toml # my future choise is uv
+.gitignore
 ---
 
 ## ⚙️ 5. Configuration Management
@@ -51,15 +65,16 @@ text src/   ├── api/              # API routes / controllers   ├── s
 ### Rules
 - Centralize all configuration
 - No hardcoded values or secrets
+- Hydra (maybe??)
 
 ### Priority Order
 
-text CLI > ENV > Pydantic Settings > Mongo-based Settings 
+CLI > ENV > Pydantic Settings > Mongo-based Settings 
 
 ### Requirements
 - Use Pydantic Settings
 - Store env variables in /config
-- Use clear naming conventions (e.g., DB_HOST, API_TIMEOUT)
+- Use clear naming conventions (e.g., PROJECT_NAME__DB_HOST, PROJECT_NAME__API_TIMEOUT)
 
 ---
 
@@ -85,11 +100,14 @@ text CLI > ENV > Pydantic Settings > Mongo-based Settings
   - Repository
   - Factory
   - Strategy
+  - Builder
+  - Port & Adapter
+  - Specification
   - Dependency Injection
 
 - Follow SOLID principles
 - Follow the Zen of Python:
-  python   import this   
+  ```python   import this   ```
 
 ---
 
@@ -136,7 +154,7 @@ python def get_user(user_id: str) -> User:     """Fetch a user by ID."""
 
 ### Repository Pattern
 
-text Service → Repository → Database 
+Service → Repository → Database 
 
 ### Requirements
 - Implement Base Repository
@@ -167,6 +185,7 @@ text Service → Repository → Database
 - Never commit secrets
 - Use environment variables
 - Use secret managers in production
+- Create a utility for encrypting and decryting data which will be used inside this project
 
 ---
 
@@ -211,4 +230,4 @@ A feature is complete when:
 
 > Consistency beats cleverness.  
 > Simplicity scales.  
-> Performance matte
+> Performance matter.
